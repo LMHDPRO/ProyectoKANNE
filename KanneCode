@@ -1,0 +1,124 @@
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+#include <Servo.h>
+
+#define EN1  5
+#define M1A  3
+#define M1B  2
+
+//Rango entre 0 a 255
+int MotorPower = 255;
+boolean backwards = false;
+
+//Crear el objeto lcd  dirección  0x3F y 16 columnas x 2 filas
+LiquidCrystal_I2C lcd(0x20,16,2);  //
+
+//Potenciometro de nivel
+const int analogPin = A0;
+float value;      //variable que almacena la lectura analógica raw
+float position;   //posicion del potenciometro en tanto por ciento
+
+//Ultrasonico
+const int PinTrig = 7;
+const int PinEcho = 6;
+const float VelSon = 34000.0;
+float distancia;
+
+
+//Medición del tanque
+const float maxDist = 10;
+float realDist;
+
+//ServoMotor
+int pos = 0;
+Servo servo_9;
+
+
+void setup() {
+  // Inicializar el LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.print(" Proyecto Kanne");
+  lcd.setCursor(0,1);
+
+  //Ultrasonico
+  pinMode(PinTrig, OUTPUT);
+  pinMode(PinEcho, INPUT);
+  
+  //Bomba de agua
+  pinMode(EN1, OUTPUT);
+  pinMode(M1A, OUTPUT);
+  pinMode(M1B, OUTPUT);
+  
+  //Servo
+  servo_9.attach(9);
+  
+  //LCD
+  lcd.print("Inicializando...");
+  delay(1000);
+  
+  lcd.clear();
+}
+
+void loop() {
+  
+    //Medir cual es el valor de altura del Pot
+    value = analogRead(analogPin);
+    value = value * 100;
+    position = map(value, 0, 1023, 0, 10);
+    position = position /100;
+  
+  	lcd.setCursor(0,0);
+    lcd.print("Valor");
+  	lcd.setCursor(0,1);
+    lcd.print("Sensor");
+
+    //Pantalla
+    lcd.setCursor(10,0);
+    lcd.print(position);
+    lcd.setCursor(14,0);
+    lcd.print("cm");
+    delay(100);
+    
+    //Medir cual es la altura del tanque
+	iniciarTrigger();
+  
+    // La función pulseIn obtiene el tiempo que tarda en cambiar entre estados, en este caso a HIGH
+    unsigned long tiempo = pulseIn(PinEcho, HIGH);
+
+    // Obtenemos la distancia en cm, hay que convertir el tiempo en segudos ya que está en microsegundos
+    // por eso se multiplica por 0.000001
+    distancia = tiempo * 0.000001 * VelSon / 2.0;
+    lcd.setCursor(10,1);
+    realDist = maxDist - distancia;
+    lcd.print(realDist);
+    lcd.setCursor(14,1);
+    lcd.print("cm");
+    delay(100);
+    
+  /*
+  HAY QUE MEDIR CUANTO ES EL VALOR PARA ABRIR LO QUE QUEREMOS
+    //Abrir llave
+	pos = 90;  
+  	servo_9.write(pos);
+    */
+  
+  	//Bomba de agua 105(3.3V) - 155(5V) - 185(6V)
+  	digitalWrite(M1A, LOW);
+    digitalWrite(M1B, HIGH); 
+  	analogWrite(EN1, 105);
+}
+
+void iniciarTrigger()
+{
+  // Ponemos el Triiger en estado bajo y esperamos 2 ms
+  digitalWrite(PinTrig, LOW);
+  delayMicroseconds(2);
+  
+  // Ponemos el pin Trigger a estado alto y esperamos 10 ms
+  digitalWrite(PinTrig, HIGH);
+  delayMicroseconds(10);
+  
+  // Comenzamos poniendo el pin Trigger en estado bajo
+  digitalWrite(PinTrig, LOW);
+}
