@@ -2,6 +2,9 @@
 #include <LiquidCrystal_I2C.h>
 #include <Servo.h>
 
+
+//PROYECTO EN TINKERCAD: https://www.tinkercad.com/things/01dKPdWPvW7-kanne-pcb
+
 #define EN1  5
 #define M1A  3
 #define M1B  2
