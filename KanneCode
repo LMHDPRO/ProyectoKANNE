@@ -2,19 +2,24 @@
 #include <LiquidCrystal_I2C.h>
 #include <Servo.h>
 
-
-//PROYECTO EN TINKERCAD: https://www.tinkercad.com/things/01dKPdWPvW7-kanne-pcb
-
 #define EN1  5
 #define M1A  3
 #define M1B  2
 
-//Rango entre 0 a 255
-int MotorPower = 255;
+// Definir los parámetros del controlador PID
+// double Kp = 2.604, Ki = 15.72, Kd = 3.93;
+double Kp = 5.604, Ki = 10.312, Kd = 3.93;
+double dt = 0.1;
+double setpoint = 0;  // inicializar en 0
+double output = 0;
+
+//Rango entre 105 y 185
+int MotorPower = 180; // Definir el valor mínimo de potencia
+int MaxMotorPower = 255; // Definir el valor máximo de potencia
 boolean backwards = false;
 
 //Crear el objeto lcd  dirección  0x3F y 16 columnas x 2 filas
-LiquidCrystal_I2C lcd(0x20,16,2);  //
+LiquidCrystal_I2C lcd(0x27,16,2);  //
 
 //Potenciometro de nivel
 const int analogPin = A0;
@@ -27,7 +32,6 @@ const int PinEcho = 6;
 const float VelSon = 34000.0;
 float distancia;
 
-
 //Medición del tanque
 const float maxDist = 10;
 float realDist;
@@ -36,6 +40,9 @@ float realDist;
 int pos = 0;
 Servo servo_9;
 
+// Variables para el controlador PID
+double lastError = 0;
+double integral = 0;
 
 void setup() {
   // Inicializar el LCD
@@ -43,6 +50,8 @@ void setup() {
   lcd.backlight();
   lcd.print(" Proyecto Kanne");
   lcd.setCursor(0,1);
+
+  Serial.begin(9600);
 
   //Ultrasonico
   pinMode(PinTrig, OUTPUT);
@@ -65,26 +74,43 @@ void setup() {
 
 void loop() {
   
-    //Medir cual es el valor de altura del Pot
+    // Leer el valor del potenciómetro en tiempo real
     value = analogRead(analogPin);
-    value = value * 100;
     position = map(value, 0, 1023, 0, 10);
-    position = position /100;
+    position = constrain(position, 0, 10); // Asegurar que el valor esté dentro del rango 0-10
   
-  	lcd.setCursor(0,0);
+
+    setpoint= 6;
+
+
+    // Controlador PID
+    double error = setpoint - realDist;
+    integral += error * dt;
+    double derivative = (error - lastError) / dt;
+    output = Kp * error + ((integral)/(Ki)) + Kd * derivative;
+    lastError = error;
+    
+    // Limitar la salida
+    output = constrain(output, 100, 255); // Asegurar que el valor esté dentro del rango 0-1
+
+    // Convertir el valor de output al rango del motor
+    output = map(output, 100, 255, MotorPower, MaxMotorPower);
+  
+    lcd.setCursor(0,0);
     lcd.print("Valor");
-  	lcd.setCursor(0,1);
+    lcd.setCursor(0,1);
     lcd.print("Sensor");
 
     //Pantalla
     lcd.setCursor(10,0);
     lcd.print(position);
+    // Serial.print(position);
     lcd.setCursor(14,0);
     lcd.print("cm");
     delay(100);
     
     //Medir cual es la altura del tanque
-	iniciarTrigger();
+  iniciarTrigger();
   
     // La función pulseIn obtiene el tiempo que tarda en cambiar entre estados, en este caso a HIGH
     unsigned long tiempo = pulseIn(PinEcho, HIGH);
@@ -93,23 +119,26 @@ void loop() {
     // por eso se multiplica por 0.000001
     distancia = tiempo * 0.000001 * VelSon / 2.0;
     lcd.setCursor(10,1);
-    realDist = maxDist - distancia;
+    realDist = distancia;
     lcd.print(realDist);
     lcd.setCursor(14,1);
     lcd.print("cm");
     delay(100);
     
-  /*
-  HAY QUE MEDIR CUANTO ES EL VALOR PARA ABRIR LO QUE QUEREMOS
-    //Abrir llave
-	pos = 90;  
-  	servo_9.write(pos);
-    */
-  
-  	//Bomba de agua 105(3.3V) - 155(5V) - 185(6V)
-  	digitalWrite(M1A, LOW);
-    digitalWrite(M1B, HIGH); 
-  	analogWrite(EN1, 105);
+    // Control de la bomba de agua
+    if (realDist > setpoint) {
+        digitalWrite(M1A, LOW);
+        digitalWrite(M1B, HIGH);
+        analogWrite(EN1, output);
+    } else {
+        digitalWrite(M1A, LOW);
+        digitalWrite(M1B, LOW);
+        analogWrite(EN1, 0);
+    }
+    Serial.print(setpoint);
+    Serial.print(",");
+    Serial.print(realDist);
+    Serial.println(" ");
 }
 
 void iniciarTrigger()
